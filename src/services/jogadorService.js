@@ -25,6 +25,17 @@ export const JogadorService = {
         }
     },
 
+    togglePresente: (id, statusAtual) => {
+        try {
+            const novoStatus = statusAtual === 1 ? 0 : 1;
+            db.runSync('UPDATE jogadores SET presente = ? WHERE id = ?', [novoStatus, id]);
+            return true;
+        } catch (error) {
+            console.error("❌ [Service] Erro no check-in:", error);
+            return false;
+        }
+    },
+
     // UPDATE: Função nova para atualizar o nome e a posição
     update: (id, nome, posicao) => {
         try {
