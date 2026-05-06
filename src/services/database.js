@@ -10,17 +10,25 @@ export const setupDatabase = () => {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome TEXT NOT NULL,
                 posicao TEXT NOT NULL,
-                presente INTEGER DEFAULT 0 
+                presente INTEGER DEFAULT 0,
+                time_id INTEGER DEFAULT 0 -- 0 significa sem time
             );
+
+            CREATE TABLE IF NOT EXISTS configuracao (
+                id INTEGER PRIMARY KEY CHECK (id = 1), -- Garante apenas 1 linha
+                jogadores_por_time INTEGER DEFAULT 5,
+                conta_goleiro INTEGER DEFAULT 1
+            );
+
+            -- Insere a config padrão se não existir
+            INSERT OR IGNORE INTO configuracao (id, jogadores_por_time, conta_goleiro) VALUES (1, 5, 1);
         `);
-        // Medida de segurança: Adiciona a coluna presente caso a tabela já exista sem ela
-        try {
-            db.execSync('ALTER TABLE jogadores ADD COLUMN presente INTEGER DEFAULT 0;');
-        } catch (e) {
-            // Se cair aqui, é porque a coluna já existe, tudo bem.
-        }
-        console.log("✅ [DB] Banco pronto para Check-in!");
+
+        // Garante que a coluna time_id exista se a tabela já era antiga
+        try { db.execSync('ALTER TABLE jogadores ADD COLUMN time_id INTEGER DEFAULT 0;'); } catch(e){}
+
+        console.log("✅ [DB] Estrutura de Sorteio Pronta!");
     } catch (error) {
-        console.error("❌ [DB] Erro ao iniciar banco:", error);
+        console.error("❌ [DB] Erro:", error);
     }
 };

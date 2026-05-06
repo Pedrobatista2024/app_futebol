@@ -9,7 +9,9 @@ import Cadastro from './src/screens/Cadastro';
 import Estatisticas from './src/screens/Estatisticas'; 
 import PainelControle from './src/screens/PainelControle';
 import Checkin from './src/screens/Checkin';
-
+import FazerSorteio from './src/screens/FazerSorteio';
+import ConfigurarEstrutura from './src/screens/ConfigurarEstrutura';
+import VisualizarTimes from './src/screens/VisualizarTimes';
 
 // Cria o gerenciador de pilhas (Stack)
 const Stack = createNativeStackNavigator();
@@ -53,7 +55,27 @@ export default function App() {
         options={{ title: 'Painel do Racha' }}
         />
 
-        <Stack.Screen name="Checkin" component={Checkin}
+        <Stack.Screen
+        name="Checkin"
+        component={Checkin}
+        />
+
+        <Stack.Screen
+        name="FazerSorteio"
+        component={FazerSorteio}
+        options={{ title: 'Central do Sorteio' }}
+        />
+
+        <Stack.Screen 
+        name="ConfigurarEstrutura" 
+        component={ConfigurarEstrutura} 
+        options={{ title: 'Estrutura dos Times' }} 
+        />
+
+        <Stack.Screen 
+          name="VisualizarTimes" 
+          component={VisualizarTimes}
+          options={{ title: 'Times Sorteados' }}
         />
 
       </Stack.Navigator>
