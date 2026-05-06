@@ -1,16 +1,29 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { JogadorService } from '../services/jogadorService';
 
 export default function PainelControle({ navigation }) {
+  
+  // Função que valida o sorteio e inicia a partida
+  const handleIniciarRacha = () => {
+    const temSorteio = JogadorService.verificarSorteioRealizado();
+    
+    if (!temSorteio) {
+      Alert.alert(
+        "Atenção!", 
+        "Você precisa realizar o Sorteio dos times antes de iniciar a partida."
+      );
+    } else {
+      // Navega direto para a tela de jogo
+      navigation.navigate('PlacarCronometro');
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Preparação do Racha ⚙️</Text>
       
-      {/* 1. Check-in */}
-      <TouchableOpacity 
-        style={[styles.botaoCard, { borderLeftColor: '#4CAF50' }]} 
-        onPress={() => navigation.navigate('Checkin')}
-      >
+      <TouchableOpacity style={[styles.botaoCard, { borderLeftColor: '#4CAF50' }]} onPress={() => navigation.navigate('Checkin')}>
         <View style={styles.iconContainer}><Text style={styles.icone}>✅</Text></View>
         <View style={styles.textoContainer}>
           <Text style={[styles.textoBotao, { color: '#4CAF50' }]}>1. Check-in</Text>
@@ -18,11 +31,7 @@ export default function PainelControle({ navigation }) {
         </View>
       </TouchableOpacity>
 
-      {/* 2. Central do Sorteio (AQUI ENTRA A MUDANÇA) */}
-      <TouchableOpacity 
-        style={[styles.botaoCard, { borderLeftColor: '#9C27B0' }]} 
-        onPress={() => navigation.navigate('FazerSorteio')}
-      >
+      <TouchableOpacity style={[styles.botaoCard, { borderLeftColor: '#9C27B0' }]} onPress={() => navigation.navigate('FazerSorteio')}>
         <View style={styles.iconContainer}><Text style={styles.icone}>🎲</Text></View>
         <View style={styles.textoContainer}>
           <Text style={[styles.textoBotao, { color: '#9C27B0' }]}>2. Fazer Sorteio</Text>
@@ -30,11 +39,7 @@ export default function PainelControle({ navigation }) {
         </View>
       </TouchableOpacity>
 
-      {/* 3. Configurar Partida */}
-      <TouchableOpacity 
-        style={[styles.botaoCard, { borderLeftColor: '#2196F3' }]} 
-        onPress={() => console.log('Indo para Configurar Partida')}
-      >
+      <TouchableOpacity style={[styles.botaoCard, { borderLeftColor: '#2196F3' }]} onPress={() => navigation.navigate('ConfigurarPartida')}>
         <View style={styles.iconContainer}><Text style={styles.icone}>⏱️</Text></View>
         <View style={styles.textoContainer}>
           <Text style={[styles.textoBotao, { color: '#2196F3' }]}>3. Configurar Partida</Text>
@@ -42,10 +47,10 @@ export default function PainelControle({ navigation }) {
         </View>
       </TouchableOpacity>
 
-      {/* 4. Iniciar Racha */}
+      {/* Botão de Iniciar Racha Atualizado e Ativo */}
       <TouchableOpacity 
         style={[styles.botaoCard, { borderLeftColor: '#F44336', marginTop: 20 }]} 
-        onPress={() => console.log('Iniciando o Racha')}
+        onPress={handleIniciarRacha}
       >
         <View style={styles.iconContainer}><Text style={styles.icone}>🚀</Text></View>
         <View style={styles.textoContainer}>
@@ -58,7 +63,6 @@ export default function PainelControle({ navigation }) {
   );
 }
 
-// Estilos continuam os mesmos
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
   title: { fontSize: 26, fontWeight: 'bold', marginBottom: 30, marginTop: 10, textAlign: 'center', color: '#333' },
