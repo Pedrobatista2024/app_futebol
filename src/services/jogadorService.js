@@ -166,6 +166,7 @@ export const JogadorService = {
         } catch (e) { return false; }
     },
 
+    // 🔴 ATUALIZADO: Agora salva a participação mesmo de quem não fez gol
     encerrarPartidaCompleto: (dadosPartida, estatisticasA, estatisticasB) => {
         try {
             const rachaId = JogadorService.getRachaAtualId();
@@ -183,14 +184,13 @@ export const JogadorService = {
 
             const partidaId = result.lastInsertRowId; 
 
+            // Alterado: Retiramos o 'if' que bloqueava quem fez 0 gols. Agora salva todo mundo para contar como 'Partida Jogada'
             const salvarScorers = (lista) => {
                 lista.forEach(est => {
-                    if (est.gols > 0 || est.assistencias > 0 || est.gols_contra > 0) {
-                        db.runSync(
-                            'INSERT INTO estatisticas_partida (partida_id, jogador_id, gols, assistencias, gols_contra) VALUES (?, ?, ?, ?, ?)',
-                            [partidaId, est.jogador_id, est.gols, est.assistencias, est.gols_contra || 0]
-                        );
-                    }
+                    db.runSync(
+                        'INSERT INTO estatisticas_partida (partida_id, jogador_id, gols, assistencias, gols_contra) VALUES (?, ?, ?, ?, ?)',
+                        [partidaId, est.jogador_id, est.gols, est.assistencias, est.gols_contra || 0]
+                    );
                 });
             };
 
@@ -246,7 +246,7 @@ export const JogadorService = {
     },
 
     // ==========================================
-    // PARTE 4: ESTATÍSTICAS DO FIM DO RACHA
+    // PARTE 4: ESTATÍSTICAS E RESUMOS
     // ==========================================
 
     getResumoRachaAtual: () => {
@@ -254,10 +254,8 @@ export const JogadorService = {
             const rachaId = JogadorService.getRachaAtualId();
             if (!rachaId) return null;
 
-            // Busca os jogos apenas de hoje
             const partidas = db.getAllSync('SELECT * FROM partidas WHERE racha_id = ?', [rachaId]);
             
-            // Busca gols e assistências somados por jogador, apenas do racha de hoje
             const estatisticas = db.getAllSync(`
                 SELECT e.jogador_id, j.nome, SUM(e.gols) as gols, SUM(e.assistencias) as assistencias
                 FROM estatisticas_partida e
@@ -267,7 +265,6 @@ export const JogadorService = {
                 GROUP BY e.jogador_id
             `, [rachaId]);
 
-            // 1. Tabela Estilo Brasileirão
             let timesMap = {};
             partidas.forEach(p => {
                 if (!timesMap[p.time_a_id]) timesMap[p.time_a_id] = { id: p.time_a_id, Pts: 0, J: 0, V: 0, E: 0, D: 0, GP: 0, GC: 0, SG: 0 };
@@ -297,7 +294,6 @@ export const JogadorService = {
                 return t;
             });
 
-            // Ordem: Pontos > Saldo de Gols > Gols Feitos
             tabelaTimes.sort((a, b) => {
                 if (b.Pts !== a.Pts) return b.Pts - a.Pts;
                 if (b.SG !== a.SG) return b.SG - a.SG;
@@ -305,7 +301,6 @@ export const JogadorService = {
                 return a.id - b.id;
             });
 
-            // 2. Melhores do Dia
             let artilheiros = [...estatisticas].sort((a, b) => b.gols - a.gols).filter(j => j.gols > 0);
             let garcons = [...estatisticas].sort((a, b) => b.assistencias - a.assistencias).filter(j => j.assistencias > 0);
 
@@ -320,11 +315,38 @@ export const JogadorService = {
         }
     },
 
-    // Executado apenas quando o botão vermelho FIM for clicado
     encerrarRachaDeVez: () => {
         try {
             db.runSync('UPDATE jogadores SET time_id = 0');
             return true;
         } catch (e) { return false; }
+    },
+
+    // 🔴 NOVA FUNÇÃO: Resgata o histórico acumulado global de 1 jogador
+    getStatsJogador: (jogadorId) => {
+        try {
+            const jogador = db.getFirstSync('SELECT nome, posicao FROM jogadores WHERE id = ?', [jogadorId]);
+            
+            // Soma tudo o que o jogador fez na história
+            const acumulado = db.getFirstSync(`
+                SELECT 
+                    SUM(gols) as gols, 
+                    SUM(assistencias) as assistencias, 
+                    COUNT(partida_id) as partidas
+                FROM estatisticas_partida 
+                WHERE jogador_id = ?
+            `, [jogadorId]);
+
+            return {
+                nome: jogador.nome,
+                posicao: jogador.posicao,
+                gols: acumulado.gols || 0,
+                assistencias: acumulado.assistencias || 0,
+                partidas: acumulado.partidas || 0,
+                vitorias: 0, // Como conversamos, será implementado na migração do banco
+                derrotas: 0,
+                empates: 0
+            };
+        } catch (e) { return null; }
     }
 };

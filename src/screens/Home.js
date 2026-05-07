@@ -37,13 +37,13 @@ export default function Home({ navigation }) {
       {/* NOVO - Card 3: Estatísticas (Roxo) */}
       <TouchableOpacity 
         style={[styles.botaoCard, { borderLeftColor: '#9C27B0' }]} 
-        onPress={() => console.log('Botão Estatísticas clicado - Placeholder')}
+        onPress={() => navigation.navigate('EstatisticasGeraisHub')}
       >
         <View style={styles.iconContainer}>
           <Text style={styles.icone}>📊</Text>
         </View>
         <View style={styles.textoContainer}>
-          <Text style={[styles.textoBotao, { color: '#9C27B0' }]}>Estatísticas</Text>
+          <Text style={[styles.textoBotao, { color: '#9C27B0' }]}>Estatísticas Gerais Futeboleiros</Text>
           <Text style={styles.subtextoBotao}>Artilharia, rankings e histórico</Text>
         </View>
       </TouchableOpacity>
