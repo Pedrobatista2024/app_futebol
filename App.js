@@ -13,8 +13,6 @@ import FazerSorteio from './src/screens/FazerSorteio';
 import ConfigurarEstrutura from './src/screens/ConfigurarEstrutura';
 import VisualizarTimes from './src/screens/VisualizarTimes';
 import ConfigurarPartida from './src/screens/ConfigurarPartida';
-
-// NOVAS TELAS DO FLUXO DE JOGO
 import PlacarCronometro from './src/screens/PlacarCronometro';
 import RegistroEstatisticas from './src/screens/RegistroEstatisticas';
 import PosJogo from './src/screens/PosJogo';
@@ -24,6 +22,7 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   
   useEffect(() => {
+    // Inicializa o banco de dados SQLite
     setupDatabase(); 
   }, []);
 
@@ -31,6 +30,7 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Home">
         
+        {/* Telas de Navegação Livre (Com seta de voltar) */}
         <Stack.Screen 
           name="Home" 
           component={Home} 
@@ -46,62 +46,75 @@ export default function App() {
         <Stack.Screen 
           name="Estatisticas" 
           component={Estatisticas} 
-          options={{ title: 'Estatísticas Gerais' }} 
+          options={{ title: 'Ranking Geral' }} 
         />
 
         <Stack.Screen 
           name="PainelControle"
           component={PainelControle}
-          options={{ title: 'Painel do Racha' }}
+          options={{ title: 'Painel do Racha' }} // ESTA MANTÉM A SETA (Sempre permite voltar)
         />
 
         <Stack.Screen
           name="Checkin"
           component={Checkin}
-          options={{ title: 'Check-in de Presença' }}
+          options={{ title: 'Check-in' }}
         />
 
         <Stack.Screen
           name="FazerSorteio"
           component={FazerSorteio}
-          options={{ title: 'Central do Sorteio' }}
+          options={{ title: 'Sorteio' }}
         />
 
         <Stack.Screen 
           name="ConfigurarEstrutura" 
           component={ConfigurarEstrutura} 
-          options={{ title: 'Estrutura dos Times' }} 
+          options={{ title: 'Estrutura' }} 
         />
 
         <Stack.Screen 
           name="VisualizarTimes" 
           component={VisualizarTimes}
-          options={{ title: 'Times Sorteados' }}
+          options={{ title: 'Times' }}
         />
 
         <Stack.Screen
           name="ConfigurarPartida"
           component={ConfigurarPartida}
-          options={{ title: 'Regras da Partida' }}
+          options={{ title: 'Regras' }}
         />
 
-        {/* ROTAS DO FLUXO DE JOGO ATIVO */}
+        {/* 🛡️ TELAS DO FLUXO CRÍTICO (Seta de voltar DESATIVADA) */}
+        
         <Stack.Screen
           name="PlacarCronometro"
           component={PlacarCronometro}
-          options={{ title: 'Partida em Andamento', headerLeft: () => null }} // headerLeft null impede voltar e bugar o tempo
+          options={{ 
+            title: 'Partida ao Vivo',
+            headerBackVisible: false, // Esconde a seta
+            gestureEnabled: false     // Impede o gesto de voltar
+          }}
         />
 
         <Stack.Screen
           name="RegistroEstatisticas"
           component={RegistroEstatisticas}
-          options={{ title: 'Resumo do Jogo', headerLeft: () => null }}
+          options={{ 
+            title: 'Resumo do Jogo',
+            headerBackVisible: false, 
+            gestureEnabled: false 
+          }}
         />
 
         <Stack.Screen
           name="PosJogo"
           component={PosJogo}
-          options={{ title: 'Próximos Passos', headerLeft: () => null }}
+          options={{ 
+            title: 'Próximos Passos',
+            headerBackVisible: false, 
+            gestureEnabled: false 
+          }}
         />
 
       </Stack.Navigator>

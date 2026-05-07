@@ -1,21 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { JogadorService } from '../services/jogadorService';
+import { JogadorService } from '../services/jogadorService'; 
 
-export default function PainelControle({ navigation }) {
+// ADICIONADO: A propriedade 'route' para conseguirmos ler os parâmetros enviados
+export default function PainelControle({ route, navigation }) {
   
-  // Função que valida o sorteio e inicia a partida
+  // Verifica se a tela foi aberta a partir da tela de Pós-Jogo
+  const vindoDoJogo = route.params?.vindoDoJogo || false;
+
   const handleIniciarRacha = () => {
     const temSorteio = JogadorService.verificarSorteioRealizado();
     
     if (!temSorteio) {
-      Alert.alert(
-        "Atenção!", 
-        "Você precisa realizar o Sorteio dos times antes de iniciar a partida."
-      );
+      Alert.alert("Atenção!", "Você precisa realizar o Sorteio dos times antes de iniciar a partida.");
     } else {
-      // Navega direto para a tela de jogo
-      navigation.navigate('PlacarCronometro');
+      navigation.navigate('PlacarCronometro'); 
     }
   };
 
@@ -23,6 +22,15 @@ export default function PainelControle({ navigation }) {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Preparação do Racha ⚙️</Text>
       
+      {/* NOVO: Um banner amigável orientando o usuário a usar a setinha de voltar */}
+      {vindoDoJogo && (
+         <View style={styles.avisoContainer}>
+            <Text style={styles.avisoTexto}>
+              ⚠️ Você está no meio de um racha. Faça os ajustes necessários e use a setinha de voltar (no topo) para retornar à partida.
+            </Text>
+         </View>
+      )}
+
       <TouchableOpacity style={[styles.botaoCard, { borderLeftColor: '#4CAF50' }]} onPress={() => navigation.navigate('Checkin')}>
         <View style={styles.iconContainer}><Text style={styles.icone}>✅</Text></View>
         <View style={styles.textoContainer}>
@@ -47,17 +55,16 @@ export default function PainelControle({ navigation }) {
         </View>
       </TouchableOpacity>
 
-      {/* Botão de Iniciar Racha Atualizado e Ativo */}
-      <TouchableOpacity 
-        style={[styles.botaoCard, { borderLeftColor: '#F44336', marginTop: 20 }]} 
-        onPress={handleIniciarRacha}
-      >
-        <View style={styles.iconContainer}><Text style={styles.icone}>🚀</Text></View>
-        <View style={styles.textoContainer}>
-          <Text style={[styles.textoBotao, { color: '#F44336' }]}>4. Iniciar Racha</Text>
-          <Text style={styles.subtextoBotao}>Ir para o placar e cronômetro</Text>
-        </View>
-      </TouchableOpacity>
+      {/* LÓGICA DE EXIBIÇÃO: Só renderiza o botão "Iniciar" se NÃO estiver vindo do jogo */}
+      {!vindoDoJogo && (
+        <TouchableOpacity style={[styles.botaoCard, { borderLeftColor: '#F44336', marginTop: 20 }]} onPress={handleIniciarRacha}>
+          <View style={styles.iconContainer}><Text style={styles.icone}>🚀</Text></View>
+          <View style={styles.textoContainer}>
+            <Text style={[styles.textoBotao, { color: '#F44336' }]}>4. Iniciar Racha</Text>
+            <Text style={styles.subtextoBotao}>Ir para o placar e cronômetro</Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
     </ScrollView>
   );
@@ -65,7 +72,12 @@ export default function PainelControle({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
-  title: { fontSize: 26, fontWeight: 'bold', marginBottom: 30, marginTop: 10, textAlign: 'center', color: '#333' },
+  title: { fontSize: 26, fontWeight: 'bold', marginBottom: 20, marginTop: 10, textAlign: 'center', color: '#333' },
+  
+  // Estilo do novo aviso
+  avisoContainer: { backgroundColor: '#FFF3CD', padding: 15, borderRadius: 10, marginBottom: 20, borderWidth: 1, borderColor: '#FFE082' },
+  avisoTexto: { color: '#F57C00', fontSize: 13, fontWeight: 'bold', textAlign: 'center', lineHeight: 18 },
+  
   botaoCard: { flexDirection: 'row', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, borderLeftWidth: 6, alignItems: 'center' },
   iconContainer: { marginRight: 15, backgroundColor: '#f9f9f9', padding: 10, borderRadius: 10 },
   icone: { fontSize: 26 },

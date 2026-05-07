@@ -75,7 +75,7 @@ export const JogadorService = {
         try {
             return db.getFirstSync('SELECT * FROM configuracao WHERE id = 1');
         } catch (error) {
-            return { jogadores_por_time: 5, conta_goleiro: 1 }; // Padrão se der erro
+            return { jogadores_por_time: 5, conta_goleiro: 1, tempo_partida: 10, gols_partida: 2 }; // Padrão se der erro
         }
     },
 
@@ -101,7 +101,7 @@ export const JogadorService = {
         }
     },
 
-    // NOVO: Verifica se já existe um sorteio realizado (resolve o erro de undefined)
+    // NOVO: Verifica se já existe um sorteio realizado
     verificarSorteioRealizado: () => {
         try {
             const resultado = db.getFirstSync('SELECT COUNT(*) as total FROM jogadores WHERE time_id > 0');
@@ -152,6 +152,10 @@ export const JogadorService = {
                 }
             });
 
+            // IMPORTANTE: Ao fazer um novo sorteio, limpamos o histórico do racha anterior
+            db.runSync('DELETE FROM partidas');
+            db.runSync('DELETE FROM estatisticas_partida');
+
             return true;
         } catch (e) { 
             console.error("❌ [Service] Erro no Sorteio:", e); 
@@ -194,20 +198,25 @@ export const JogadorService = {
         } catch (e) { return []; }
     },
 
-    // Salva o resultado de uma partida no histórico (opcional para o ranking depois)
+    // ==========================================
+    // PARTE 3: LÓGICA DE PARTIDAS E ESTATÍSTICAS
+    // ==========================================
+
+    // Salva o resultado de uma partida simples
     salvarResultadoPartida: (timeA, golsA, timeB, golsB) => {
         try {
-            db.runSync('INSERT INTO partidas (time_a, gols_a, time_b, gols_b, data) VALUES (?, ?, ?, ?, ?)', 
+            db.runSync('INSERT INTO partidas (time_a_id, gols_a, time_b_id, gols_b, data) VALUES (?, ?, ?, ?, ?)', 
             [timeA, golsA, timeB, golsB, new Date().toISOString()]);
             return true;
         } catch (e) { return false; }
     },
 
+    // Salva a partida COMPLETA com artilheiros e assistências (Usado no Pós Jogo)
     encerrarPartidaCompleto: (dadosPartida, estatisticasA, estatisticasB) => {
         try {
             // 1. Insere a partida
             const { time_a_id, time_b_id, gols_a, gols_b } = dadosPartida;
-            let vencedor_id = 0;
+            let vencedor_id = 0; // 0 = Empate
             if (gols_a > gols_b) vencedor_id = time_a_id;
             else if (gols_b > gols_a) vencedor_id = time_b_id;
 
@@ -220,25 +229,21 @@ export const JogadorService = {
             const ultimaPartida = db.getFirstSync('SELECT id FROM partidas ORDER BY id DESC LIMIT 1');
             const partidaId = ultimaPartida.id;
 
-            // 2. Salva estatísticas do Time A
-            estatisticasA.forEach(est => {
-                if (est.gols > 0 || est.assistencias > 0 || est.gols_contra > 0) {
-                    db.runSync(
-                        'INSERT INTO estatisticas_partida (partida_id, jogador_id, gols, assistencias, gols_contra) VALUES (?, ?, ?, ?, ?)',
-                        [partidaId, est.jogador_id, est.gols, est.assistencias, est.gols_contra]
-                    );
-                }
-            });
+            // Função interna para limpar o código de salvar
+            const salvarScorers = (lista) => {
+                lista.forEach(est => {
+                    if (est.gols > 0 || est.assistencias > 0 || est.gols_contra > 0) {
+                        db.runSync(
+                            'INSERT INTO estatisticas_partida (partida_id, jogador_id, gols, assistencias, gols_contra) VALUES (?, ?, ?, ?, ?)',
+                            [partidaId, est.jogador_id, est.gols, est.assistencias, est.gols_contra || 0]
+                        );
+                    }
+                });
+            };
 
-            // 3. Salva estatísticas do Time B
-            estatisticasB.forEach(est => {
-                if (est.gols > 0 || est.assistencias > 0 || est.gols_contra > 0) {
-                    db.runSync(
-                        'INSERT INTO estatisticas_partida (partida_id, jogador_id, gols, assistencias, gols_contra) VALUES (?, ?, ?, ?, ?)',
-                        [partidaId, est.jogador_id, est.gols, est.assistencias, est.gols_contra]
-                    );
-                }
-            });
+            // 2. Salva estatísticas de ambos os times
+            salvarScorers(estatisticasA);
+            salvarScorers(estatisticasB);
 
             return true;
         } catch (e) {
@@ -248,36 +253,72 @@ export const JogadorService = {
     },
 
     // Lógica da Fila: Descobrir quem são os próximos a jogar
-    getProximoConfronto: (totalTimes) => {
+    // Lógica da Fila REAL: Simula a fila desde o jogo 1 para saber quem joga agora
+    getProximoConfronto: () => {
         try {
-            const ultima = db.getFirstSync('SELECT * FROM partidas ORDER BY id DESC LIMIT 1');
-            
-            // Se for o primeiro jogo
-            if (!ultima) return { timeA: 1, timeB: 2 };
+            // 1. Pega todos os times que estão no racha ordenados (A fila original do começo do dia)
+            const todosTimesResult = db.getAllSync('SELECT DISTINCT time_id FROM jogadores WHERE time_id > 0 ORDER BY time_id ASC');
+            let fila = todosTimesResult.map(r => r.time_id); // Ex: [1, 2, 3, 4]
+            const totalTimes = fila.length;
 
-            let proxA, proxB;
-            
-            // Regra: Quem ganha fica (timeA), perdedor vai pra rabieta
-            if (ultima.vencedor_id !== 0) {
-                proxA = ultima.vencedor_id;
-                // O próximo time é o ID seguinte ao maior ID que jogou, ou volta pro 1
-                let maiorIdJogado = Math.max(ultima.time_a_id, ultima.time_b_id);
-                proxB = maiorIdJogado + 1 > totalTimes ? 1 : maiorIdJogado + 1;
-                
-                // Evita que o time jogue contra ele mesmo se só houver 2 times
-                if (proxA === proxB) proxB = proxA === 1 ? 2 : 1;
-            } else {
-                // Regra de Empate (Saída Dupla para 4+ times)
-                if (totalTimes >= 4) {
-                    let maiorIdJogado = Math.max(ultima.time_a_id, ultima.time_b_id);
-                    proxA = maiorIdJogado + 1 > totalTimes ? 1 : maiorIdIdJogado + 1;
-                    proxB = proxA + 1 > totalTimes ? 1 : proxA + 1;
+            if (totalTimes < 2) return { timeA: 1, timeB: 2 }; // Proteção
+
+            // 2. Busca todas as partidas já jogadas hoje
+            const partidas = db.getAllSync('SELECT * FROM partidas ORDER BY id ASC');
+
+            // 3. Inicia a simulação tirando os dois primeiros que jogaram a Partida 1
+            let timeAtualA = fila.shift(); // Tira o 1º da fila
+            let timeAtualB = fila.shift(); // Tira o 2º da fila
+
+            // 4. Se não tem nenhuma partida no histórico, manda o Jogo 1
+            if (partidas.length === 0) {
+                return { timeA: timeAtualA, timeB: timeAtualB };
+            }
+
+            // 5. Roda a fita: Simula o histórico do racha inteiro para montar a fila atual
+            for (let i = 0; i < partidas.length; i++) {
+                const p = partidas[i];
+
+                if (p.vencedor_id !== 0) {
+                    // REGRA 1: TEVE VENCEDOR (QUEM GANHA FICA)
+                    const vencedor = p.vencedor_id;
+                    const perdedor = (p.time_a_id === vencedor) ? p.time_b_id : p.time_a_id;
+
+                    fila.push(perdedor); // O perdedor vai pro final da fila de espera
+                    timeAtualA = vencedor; // O vencedor continua na quadra
+                    timeAtualB = fila.shift(); // O próximo da fila de espera entra
                 } else {
-                    // Empate com poucos times: O ADM decide (padrão mantemos o último jogo para ajuste manual)
-                    return { timeA: ultima.time_a_id, timeB: ultima.time_b_id, empate: true };
+                    // REGRA 2: DEU EMPATE
+                    if (totalTimes >= 4) {
+                        // SAÍDA DUPLA: Os dois saem
+                        const menor = Math.min(p.time_a_id, p.time_b_id);
+                        const maior = Math.max(p.time_a_id, p.time_b_id);
+                        
+                        // O número menor entra na fila primeiro (para voltar a jogar mais cedo)
+                        fila.push(menor);
+                        fila.push(maior);
+
+                        // Como a quadra ficou vazia, entram os dois próximos da fila
+                        timeAtualA = fila.shift();
+                        timeAtualB = fila.shift();
+                    } else {
+                        // EMPATE COM 3 TIMES OU MENOS
+                        // A regra diz que não tem saída dupla, TEM que ir pros pênaltis
+                        // Se essa for a última partida do banco (a que acabou de acontecer), avisa a tela
+                        if (i === partidas.length - 1) {
+                            return { timeA: p.time_a_id, timeB: p.time_b_id, empate: true };
+                        }
+                    }
                 }
             }
-            return { timeA: proxA, timeB: proxB };
-        } catch (e) { return { timeA: 1, timeB: 2 }; }
+
+            // Depois de simular todo o histórico aplicando as regras de quem sai e quem entra,
+            // sabemos exatamente quem são os dois times que ficaram na ponta para jogar agora!
+            return { timeA: timeAtualA, timeB: timeAtualB };
+
+        } catch (e) {
+            console.error("Erro no Simulador de Fila:", e);
+            return { timeA: 1, timeB: 2 };
+        }
     }
 };
