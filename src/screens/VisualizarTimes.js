@@ -16,7 +16,7 @@ export default function VisualizarTimes() {
   const [modoCadastro, setModoCadastro] = useState(false);
   const [novoNome, setNovoNome] = useState('');
 
-  // NOVO: Estado para rastrear quantos times vazios foram adicionados manualmente
+  // Estado para rastrear quantos times vazios foram adicionados manualmente
   const [timesExtras, setTimesExtras] = useState(0);
 
   const carregarDados = () => {
@@ -32,8 +32,9 @@ export default function VisualizarTimes() {
     const linhaComTime = todos.filter(j => j.posicao === 'Jogador' && j.time_id > 0).length;
     const numTimesCalculado = linhaComTime > 0 ? Math.ceil(linhaComTime / configuracao.jogadores_por_time) : 0;
 
-    // O total de times a exibir é o maior entre (Sorteados, Alguém que entrou depois, ou botão "Novo Time")
-    const totalTimesAExibir = Math.max(numTimesCalculado, maxTimeIdNoBanco) + timesExtras;
+    // 🔴 AJUSTE: O limite base é o que já existe fisicamente ou por cálculo
+    const limiteBase = Math.max(numTimesCalculado, maxTimeIdNoBanco);
+    const totalTimesAExibir = limiteBase + timesExtras;
 
     let estruturaTimes = [];
     for (let i = 1; i <= totalTimesAExibir; i++) {
@@ -65,10 +66,12 @@ export default function VisualizarTimes() {
     ]);
   };
 
-  // NOVO: Função para adicionar um time inteiro novo (fantasma)
+  // Função para adicionar um time inteiro novo com confirmação
   const handleAdicionarNovoTime = () => {
-    setTimesExtras(prev => prev + 1);
-    // O carregarDados será chamado automaticamente pelo useEffect pois timesExtras mudou
+    Alert.alert("Novo Time", "Deseja criar a estrutura para um novo time?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sim, Criar", onPress: () => setTimesExtras(prev => prev + 1) }
+    ]);
   };
 
   const abrirSubstituicao = (timeId, posicao) => {
@@ -82,6 +85,11 @@ export default function VisualizarTimes() {
   };
 
   const confirmarSubstituicao = (jogadorId) => {
+    // 🔴 AJUSTE: Se preencher o time que era extra, reduz o contador para evitar o bug do "Time 4"
+    if (timeSelecionado > (times.length - timesExtras)) {
+        setTimesExtras(prev => Math.max(0, prev - 1));
+    }
+
     JogadorService.vincularJogadorAoTime(jogadorId, timeSelecionado);
     setModalVisible(false);
     carregarDados();
@@ -89,6 +97,12 @@ export default function VisualizarTimes() {
 
   const handleCadastrarEVincular = () => {
     if (novoNome.trim() === '') return;
+
+    // 🔴 AJUSTE: Mesma lógica de reset para cadastro novo
+    if (timeSelecionado > (times.length - timesExtras)) {
+        setTimesExtras(prev => Math.max(0, prev - 1));
+    }
+
     JogadorService.create(novoNome, posicaoDesejada);
     const lista = JogadorService.findAll();
     const jogadorCriado = lista.reverse().find(j => j.nome === novoNome && j.posicao === posicaoDesejada);
@@ -109,13 +123,12 @@ export default function VisualizarTimes() {
             <Text style={styles.txtBtnAjuste}>➕ Vaga Extra</Text>
           </TouchableOpacity>
 
-          {/* Correção: Removido o 'styles.areaBotoesAjuste' de dentro do array de estilos do botão */}
           <TouchableOpacity style={[styles.btnAjuste, {backgroundColor: '#2E7D32'}]} onPress={handleAdicionarNovoTime}>
             <Text style={styles.txtBtnAjuste}>🆕 Novo Time</Text>
           </TouchableOpacity>
       </View>
 
-      <ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false}>
         {times.map(time => {
           const temGoleiro = time.elenco.some(j => j.posicao === 'Goleiro');
           const qtdLinha = time.elenco.filter(j => j.posicao === 'Jogador').length;
@@ -150,6 +163,7 @@ export default function VisualizarTimes() {
             </View>
           );
         })}
+        <View style={{ height: 30 }} />
       </ScrollView>
 
       {/* MODAL (Escolha ou Cadastro) */}
@@ -178,7 +192,9 @@ export default function VisualizarTimes() {
                             </TouchableOpacity>
                         )}
                     />
-                    <Button title="Fechar" onPress={() => setModalVisible(false)} color="red" />
+                    <View style={{ marginTop: 10 }}>
+                        <Button title="Fechar" onPress={() => setModalVisible(false)} color="red" />
+                    </View>
                 </View>
             )}
           </View>
@@ -190,11 +206,9 @@ export default function VisualizarTimes() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 15, backgroundColor: '#f0f0f0' },
-  
   areaBotoesAjuste: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   btnAjuste: { flex: 1, backgroundColor: '#1A237E', padding: 12, borderRadius: 8, marginHorizontal: 5, alignItems: 'center', elevation: 3 },
   txtBtnAjuste: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-
   timeCard: { backgroundColor: '#fff', borderRadius: 10, padding: 15, marginBottom: 20, borderTopWidth: 8, elevation: 3 },
   timeTitulo: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
   jogadorLinha: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#eee' },

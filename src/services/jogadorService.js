@@ -202,16 +202,26 @@ export const JogadorService = {
         } catch (e) { return false; }
     },
 
-    encerrarPartidaCompleto: (dadosPartida, estatisticasA, estatisticasB) => {
+    encerrarPartidaCompleto: (dadosPartida, estatisticasA, estatisticasB, vencedorManualId = null) => {
         try {
             const rachaId = JogadorService.getRachaAtualId();
             if (!rachaId) return false;
 
             const { time_a_id, time_b_id, gols_a, gols_b } = dadosPartida;
+            
             let vencedor_id = 0; 
-            if (gols_a > gols_b) vencedor_id = time_a_id;
-            else if (gols_b > gols_a) vencedor_id = time_b_id;
 
+            // Lógica de definição do vencedor
+            if (gols_a > gols_b) {
+                vencedor_id = time_a_id;
+            } else if (gols_b > gols_a) {
+                vencedor_id = time_b_id;
+            } else if (vencedorManualId) {
+                // 🔴 Se empatou no placar mas o ADM definiu o vencedor (Pênaltis)
+                vencedor_id = vencedorManualId;
+            }
+
+            // Grava a partida no banco
             const result = db.runSync(
                 'INSERT INTO partidas (racha_id, time_a_id, time_b_id, gols_a, gols_b, vencedor_id, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [rachaId, time_a_id, time_b_id, gols_a, gols_b, vencedor_id, new Date().toISOString()]
@@ -219,6 +229,7 @@ export const JogadorService = {
 
             const partidaId = result.lastInsertRowId; 
 
+            // Função interna para salvar gols/assistências dos atletas
             const salvarScorers = (lista, timeDoJogadorId) => {
                 lista.forEach(est => {
                     db.runSync(
@@ -232,7 +243,10 @@ export const JogadorService = {
             salvarScorers(estatisticasB, time_b_id);
 
             return true;
-        } catch (e) { return false; }
+        } catch (e) { 
+            console.error("Erro ao encerrar partida:", e);
+            return false; 
+        }
     },
 
     getProximoConfronto: () => {
@@ -291,7 +305,7 @@ export const JogadorService = {
             const partidas = db.getAllSync('SELECT * FROM partidas WHERE racha_id = ?', [rachaId]);
             
             const estatisticas = db.getAllSync(`
-                SELECT e.jogador_id, j.nome, SUM(e.gols) as gols, SUM(e.assistencias) as assistencias
+                SELECT e.jogador_id, j.nome, j.foto_uri, SUM(e.gols) as gols, SUM(e.assistencias) as assistencias
                 FROM estatisticas_partida e
                 JOIN partidas p ON e.partida_id = p.id
                 JOIN jogadores j ON e.jogador_id = j.id
@@ -335,13 +349,20 @@ export const JogadorService = {
                 return a.id - b.id;
             });
 
-            let artilheiros = [...estatisticas].sort((a, b) => b.gols - a.gols).filter(j => j.gols > 0);
-            let garcons = [...estatisticas].sort((a, b) => b.assistencias - a.assistencias).filter(j => j.assistencias > 0);
+            // --- Lógica de Empates nos Destaques ---
+            
+            // Encontra qual é o maior número de gols e assistências feitos no dia
+            const maxGols = Math.max(...estatisticas.map(j => j.gols), 0);
+            const maxAssists = Math.max(...estatisticas.map(j => j.assistencias), 0);
+
+            // Filtra TODOS os jogadores que atingiram esse número máximo (se for maior que zero)
+            const artilheiros = estatisticas.filter(j => j.gols > 0 && j.gols === maxGols);
+            const garcons = estatisticas.filter(j => j.assistencias > 0 && j.assistencias === maxAssists);
 
             return {
                 tabelaTimes,
-                artilheiro: artilheiros.length > 0 ? artilheiros[0] : null,
-                garcom: garcons.length > 0 ? garcons[0] : null
+                artilheiros, // Agora retorna a lista de todos os empatados
+                garcons      // Agora retorna a lista de todos os empatados
             };
         } catch (e) {
             console.error("Erro ao gerar resumo:", e);

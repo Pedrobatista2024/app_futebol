@@ -32,7 +32,7 @@ export default function Checkin() {
             style={[styles.btnFiltro, !filtroPresentes && styles.btnFiltroAtivo]} 
             onPress={() => setFiltroPresentes(false)}
         >
-            <Text style={styles.txtFiltro}>Marcar Todos</Text>
+            <Text style={styles.txtFiltro}>Marcar Presentes</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
