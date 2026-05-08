@@ -15,7 +15,8 @@ export const setupDatabase = () => {
                 nome TEXT NOT NULL,
                 posicao TEXT NOT NULL,
                 presente INTEGER DEFAULT 0,
-                time_id INTEGER DEFAULT 0
+                time_id INTEGER DEFAULT 0,
+                foto_uri TEXT
             );
 
             -- Tabela de Configurações do Racha e da Partida
@@ -24,7 +25,8 @@ export const setupDatabase = () => {
                 jogadores_por_time INTEGER DEFAULT 5,
                 conta_goleiro INTEGER DEFAULT 1,
                 tempo_partida INTEGER DEFAULT 10,
-                gols_partida INTEGER DEFAULT 2
+                gols_partida INTEGER DEFAULT 2,
+                foto_capa_uri TEXT -- NOVO: Campo para guardar a foto da capa do Racha
             );
 
             -- NOVA TABELA: Registro de cada evento/dia de Racha
@@ -51,6 +53,7 @@ export const setupDatabase = () => {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 partida_id INTEGER,
                 jogador_id INTEGER,
+                time_id INTEGER DEFAULT 0, -- Salva em qual time ele jogou esta partida
                 gols INTEGER DEFAULT 0,
                 assistencias INTEGER DEFAULT 0,
                 gols_contra INTEGER DEFAULT 0,
@@ -67,8 +70,11 @@ export const setupDatabase = () => {
         try { db.execSync('ALTER TABLE jogadores ADD COLUMN time_id INTEGER DEFAULT 0;'); } catch(e){}
         try { db.execSync('ALTER TABLE configuracao ADD COLUMN tempo_partida INTEGER DEFAULT 10;'); } catch(e){}
         try { db.execSync('ALTER TABLE configuracao ADD COLUMN gols_partida INTEGER DEFAULT 2;'); } catch(e){}
+        try { db.execSync('ALTER TABLE estatisticas_partida ADD COLUMN time_id INTEGER DEFAULT 0;'); } catch(e){}
+        try { db.execSync('ALTER TABLE jogadores ADD COLUMN foto_uri TEXT;'); } catch(e){} 
+        try { db.execSync('ALTER TABLE configuracao ADD COLUMN foto_capa_uri TEXT;'); } catch(e){} // NOVO: Migração da Capa
 
-        console.log("✅ [DB] Estrutura Completa e Atualizada com Histórico de Rachas!");
+        console.log("✅ [DB] Estrutura Completa e Atualizada com Capa do Racha!");
     } catch (error) {
         console.error("❌ [DB] Erro Crítico na configuração:", error);
     }

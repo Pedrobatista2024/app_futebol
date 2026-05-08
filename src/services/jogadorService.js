@@ -32,11 +32,47 @@ export const JogadorService = {
         } catch (error) { return false; }
     },
 
+    updateFoto: (id, uri) => {
+        try {
+            db.runSync('UPDATE jogadores SET foto_uri = ? WHERE id = ?', [uri, id]);
+            return true;
+        } catch (error) { return false; }
+    },
+
+    updateFotoCapa: (uri) => {
+        try {
+            db.runSync('UPDATE configuracao SET foto_capa_uri = ? WHERE id = 1', [uri]);
+            return true;
+        } catch (error) { return false; }
+    },
+
     delete: (id) => {
         try {
             db.runSync('DELETE FROM jogadores WHERE id = ?', [id]);
             return true;
         } catch (error) { return false; }
+    },
+
+    // 🔴 NOVA FUNÇÃO: Busca dados simplificados de todos para o Card de Elenco
+    getElencoCompleto: () => {
+        try {
+            return db.getAllSync(`
+                SELECT 
+                    j.id, j.nome, j.foto_uri, j.posicao,
+                    SUM(ep.gols) as totalGols,
+                    SUM(ep.assistencias) as totalAssists,
+                    SUM(ep.gols_contra) as totalContra, -- 🔴 NOVO
+                    COUNT(ep.partida_id) as totalJogos,
+                    SUM(CASE WHEN p.vencedor_id = ep.time_id THEN 1 ELSE 0 END) as totalVits,
+                    SUM(CASE WHEN p.vencedor_id = 0 THEN 1 ELSE 0 END) as totalEmps,
+                    SUM(CASE WHEN p.vencedor_id != ep.time_id AND p.vencedor_id != 0 THEN 1 ELSE 0 END) as totalDers
+                FROM jogadores j
+                LEFT JOIN estatisticas_partida ep ON j.id = ep.jogador_id
+                LEFT JOIN partidas p ON ep.partida_id = p.id
+                GROUP BY j.id
+                ORDER BY totalGols DESC, j.nome ASC
+            `);
+        } catch (e) { return []; }
     },
 
     // ==========================================
@@ -166,7 +202,6 @@ export const JogadorService = {
         } catch (e) { return false; }
     },
 
-    // 🔴 ATUALIZADO: Agora salva a participação mesmo de quem não fez gol
     encerrarPartidaCompleto: (dadosPartida, estatisticasA, estatisticasB) => {
         try {
             const rachaId = JogadorService.getRachaAtualId();
@@ -184,18 +219,17 @@ export const JogadorService = {
 
             const partidaId = result.lastInsertRowId; 
 
-            // Alterado: Retiramos o 'if' que bloqueava quem fez 0 gols. Agora salva todo mundo para contar como 'Partida Jogada'
-            const salvarScorers = (lista) => {
+            const salvarScorers = (lista, timeDoJogadorId) => {
                 lista.forEach(est => {
                     db.runSync(
-                        'INSERT INTO estatisticas_partida (partida_id, jogador_id, gols, assistencias, gols_contra) VALUES (?, ?, ?, ?, ?)',
-                        [partidaId, est.jogador_id, est.gols, est.assistencias, est.gols_contra || 0]
+                        'INSERT INTO estatisticas_partida (partida_id, jogador_id, gols, assistencias, gols_contra, time_id) VALUES (?, ?, ?, ?, ?, ?)',
+                        [partidaId, est.jogador_id, est.gols, est.assistencias, est.gols_contra || 0, timeDoJogadorId]
                     );
                 });
             };
 
-            salvarScorers(estatisticasA);
-            salvarScorers(estatisticasB);
+            salvarScorers(estatisticasA, time_a_id);
+            salvarScorers(estatisticasB, time_b_id);
 
             return true;
         } catch (e) { return false; }
@@ -322,31 +356,241 @@ export const JogadorService = {
         } catch (e) { return false; }
     },
 
-    // 🔴 NOVA FUNÇÃO: Resgata o histórico acumulado global de 1 jogador
     getStatsJogador: (jogadorId) => {
         try {
-            const jogador = db.getFirstSync('SELECT nome, posicao FROM jogadores WHERE id = ?', [jogadorId]);
+            const jogador = db.getFirstSync('SELECT nome, posicao, foto_uri FROM jogadores WHERE id = ?', [jogadorId]);
             
-            // Soma tudo o que o jogador fez na história
             const acumulado = db.getFirstSync(`
                 SELECT 
-                    SUM(gols) as gols, 
-                    SUM(assistencias) as assistencias, 
-                    COUNT(partida_id) as partidas
-                FROM estatisticas_partida 
-                WHERE jogador_id = ?
+                    SUM(ep.gols) as gols, 
+                    SUM(ep.assistencias) as assistencias, 
+                    SUM(ep.gols_contra) as gols_contra, -- 🔴 NOVO
+                    COUNT(ep.partida_id) as partidas,
+                    SUM(CASE WHEN p.vencedor_id = ep.time_id THEN 1 ELSE 0 END) as vitorias,
+                    SUM(CASE WHEN p.vencedor_id = 0 THEN 1 ELSE 0 END) as empates,
+                    SUM(CASE WHEN p.vencedor_id != ep.time_id AND p.vencedor_id != 0 THEN 1 ELSE 0 END) as derrotas
+                FROM estatisticas_partida ep
+                JOIN partidas p ON ep.partida_id = p.id
+                WHERE ep.jogador_id = ?
             `, [jogadorId]);
 
             return {
                 nome: jogador.nome,
                 posicao: jogador.posicao,
+                foto_uri: jogador.foto_uri,
                 gols: acumulado.gols || 0,
                 assistencias: acumulado.assistencias || 0,
+                gols_contra: acumulado.gols_contra || 0, // 🔴 NOVO
                 partidas: acumulado.partidas || 0,
-                vitorias: 0, // Como conversamos, será implementado na migração do banco
-                derrotas: 0,
-                empates: 0
+                vitorias: acumulado.vitorias || 0,
+                derrotas: acumulado.derrotas || 0,
+                empates: acumulado.empates || 0
             };
         } catch (e) { return null; }
+    },
+
+    getPerfilRacha: () => {
+        try {
+            const config = db.getFirstSync('SELECT foto_capa_uri FROM configuracao WHERE id = 1');
+            
+            const rachas = db.getFirstSync('SELECT COUNT(*) as total FROM rachas');
+            const partidas = db.getFirstSync('SELECT COUNT(*) as total, SUM(gols_a + gols_b) as gols FROM partidas');
+            const vitorias = db.getFirstSync('SELECT COUNT(*) as total FROM partidas WHERE vencedor_id != 0');
+            const derrotas = db.getFirstSync('SELECT COUNT(*) as total FROM partidas WHERE vencedor_id != 0'); 
+            const empates = db.getFirstSync('SELECT COUNT(*) as total FROM partidas WHERE vencedor_id = 0');
+
+            const artilheiro = db.getFirstSync(`
+                SELECT j.nome, j.foto_uri, SUM(e.gols) as valor 
+                FROM estatisticas_partida e 
+                JOIN jogadores j ON e.jogador_id = j.id 
+                GROUP BY e.jogador_id 
+                ORDER BY valor DESC LIMIT 1
+            `);
+
+            const garcom = db.getFirstSync(`
+                SELECT j.nome, j.foto_uri, SUM(e.assistencias) as valor 
+                FROM estatisticas_partida e 
+                JOIN jogadores j ON e.jogador_id = j.id 
+                GROUP BY e.jogador_id 
+                ORDER BY valor DESC LIMIT 1
+            `);
+
+            const muralha = db.getFirstSync(`
+                SELECT j.nome, j.foto_uri, 
+                SUM(CASE WHEN p.time_a_id = e.time_id THEN p.gols_b ELSE p.gols_a END) as valor,
+                COUNT(e.partida_id) as partidas
+                FROM estatisticas_partida e 
+                JOIN partidas p ON e.partida_id = p.id 
+                JOIN jogadores j ON e.jogador_id = j.id 
+                WHERE j.posicao = 'Goleiro'
+                GROUP BY e.jogador_id 
+                ORDER BY valor ASC, partidas DESC LIMIT 1
+            `);
+
+            const talisma = db.getFirstSync(`
+                SELECT j.nome, j.foto_uri, COUNT(e.partida_id) as valor
+                FROM estatisticas_partida e
+                JOIN partidas p ON e.partida_id = p.id
+                JOIN jogadores j ON e.jogador_id = j.id
+                WHERE p.vencedor_id = e.time_id
+                GROUP BY e.jogador_id
+                ORDER BY valor DESC LIMIT 1
+            `);
+
+            // 🔴 ADICIONADO: BLOCO FOGO AMIGO (MAIOR GOLS CONTRA)
+            const fogoAmigo = db.getFirstSync(`
+                SELECT j.nome, j.foto_uri, SUM(e.gols_contra) as valor 
+                FROM estatisticas_partida e 
+                JOIN jogadores j ON e.jogador_id = j.id 
+                GROUP BY e.jogador_id 
+                HAVING valor > 0
+                ORDER BY valor DESC LIMIT 1
+            `);
+
+            const jogadoresRecentes = db.getAllSync(`
+                SELECT 
+                    j.id, j.nome, j.foto_uri,
+                    p.vencedor_id, e.time_id, p.id as id_partida
+                FROM estatisticas_partida e
+                JOIN partidas p ON e.partida_id = p.id
+                JOIN jogadores j ON e.jogador_id = j.id
+                ORDER BY p.id DESC
+            `);
+
+            const fasesMap = {};
+            jogadoresRecentes.forEach(row => {
+                if (!fasesMap[row.id]) {
+                    fasesMap[row.id] = { nome: row.nome, foto_uri: row.foto_uri, jogosContados: 0, pontosFase: 0 };
+                }
+                
+                if (fasesMap[row.id].jogosContados < 10) {
+                    fasesMap[row.id].jogosContados++;
+                    
+                    if (row.vencedor_id === row.time_id) {
+                        fasesMap[row.id].pontosFase += 3; 
+                    } else if (row.vencedor_id === 0) {
+                        fasesMap[row.id].pontosFase += 1; 
+                    }
+                }
+            });
+
+            const rankingFases = Object.values(fasesMap).filter(j => j.jogosContados >= 3);
+            rankingFases.sort((a, b) => b.pontosFase - a.pontosFase);
+            
+            const melhorFase = rankingFases.length > 0 ? { ...rankingFases[0], valor: rankingFases[0].pontosFase } : null;
+            const piorFase = rankingFases.length > 1 ? { ...rankingFases[rankingFases.length - 1], valor: rankingFases[rankingFases.length - 1].pontosFase } : null;
+
+            return {
+                foto_capa_uri: config ? config.foto_capa_uri : null, 
+                estatisticas: {
+                    totalRachas: rachas.total || 0,
+                    totalPartidas: partidas.total || 0,
+                    totalGols: partidas.gols || 0,
+                    totalVitorias: vitorias.total || 0,
+                    totalDerrotas: derrotas.total || 0,
+                    totalEmpates: empates.total || 0,
+                },
+                destaques: {
+                    artilheiro: artilheiro && artilheiro.valor > 0 ? artilheiro : null,
+                    garcom: garcom && garcom.valor > 0 ? garcom : null,
+                    muralha: muralha && muralha.partidas > 0 ? muralha : null,
+                    talisma: talisma && talisma.valor > 0 ? talisma : null,
+                    fogoAmigo: fogoAmigo, // 🔴 RETORNA O NOVO DESTAQUE
+                    melhorFase: melhorFase,
+                    piorFase: piorFase
+                }
+            };
+        } catch (e) {
+            console.error("Erro ao buscar perfil do racha:", e);
+            return null;
+        }
+    },
+
+    // ==========================================
+    // PARTE 5: TOP 10 RANKINGS GERAIS
+    // ==========================================
+    
+    getRankingsGerais: () => {
+        try {
+            // 1. Artilharia Geral
+            const artilharia = db.getAllSync(`SELECT j.id, j.nome, j.foto_uri, SUM(e.gols) as valor FROM estatisticas_partida e JOIN jogadores j ON e.jogador_id = j.id GROUP BY e.jogador_id HAVING valor > 0 ORDER BY valor DESC LIMIT 10`);
+
+            // 2. Garçom Geral
+            const garcom = db.getAllSync(`SELECT j.id, j.nome, j.foto_uri, SUM(e.assistencias) as valor FROM estatisticas_partida e JOIN jogadores j ON e.jogador_id = j.id GROUP BY e.jogador_id HAVING valor > 0 ORDER BY valor DESC LIMIT 10`);
+
+            // 3. Muralha (Média de Gols Sofridos por Jogo)
+            const muralhaRaw = db.getAllSync(`
+                SELECT j.id, j.nome, j.foto_uri, 
+                (SUM(CASE WHEN p.time_a_id = e.time_id THEN p.gols_b ELSE p.gols_a END) * 1.0 / COUNT(e.partida_id)) as valor
+                FROM estatisticas_partida e JOIN partidas p ON e.partida_id = p.id JOIN jogadores j ON e.jogador_id = j.id 
+                WHERE j.posicao = 'Goleiro' GROUP BY e.jogador_id HAVING COUNT(e.partida_id) >= 3 ORDER BY valor ASC LIMIT 10
+            `);
+            const muralha = muralhaRaw.map(m => ({ ...m, valor: parseFloat(m.valor).toFixed(2) })); 
+
+            // 🔴 4. FOGO AMIGO (GOLS CONTRA) - NOVO
+            const fogoAmigo = db.getAllSync(`
+                SELECT j.id, j.nome, j.foto_uri, SUM(e.gols_contra) as valor 
+                FROM estatisticas_partida e 
+                JOIN jogadores j ON e.jogador_id = j.id 
+                GROUP BY e.jogador_id 
+                HAVING valor > 0 
+                ORDER BY valor DESC LIMIT 10
+            `);
+
+            // 5. Recordes Num Único Racha
+            const recordesRacha = db.getAllSync(`
+                SELECT j.id, j.nome, j.foto_uri, SUM(e.gols) as gols, SUM(e.assistencias) as assistencias, p.racha_id
+                FROM estatisticas_partida e JOIN partidas p ON e.partida_id = p.id JOIN jogadores j ON e.jogador_id = j.id
+                GROUP BY e.jogador_id, p.racha_id
+            `);
+
+            const bestGolsDia = {}; const bestAssDia = {};
+            recordesRacha.forEach(item => {
+                if (!bestGolsDia[item.id] || bestGolsDia[item.id].valor < item.gols) bestGolsDia[item.id] = { ...item, valor: item.gols };
+                if (!bestAssDia[item.id] || bestAssDia[item.id].valor < item.assistencias) bestAssDia[item.id] = { ...item, valor: item.assistencias };
+            });
+
+            const recordeGolsRacha = Object.values(bestGolsDia).filter(i => i.valor > 0).sort((a,b) => b.valor - a.valor).slice(0, 10);
+            const recordeAssistRacha = Object.values(bestAssDia).filter(i => i.valor > 0).sort((a,b) => b.valor - a.valor).slice(0, 10);
+
+            // 6. Lógica de Sequências (Recorde Pessoal Histórico)
+            const historicoGeral = db.getAllSync(`
+                SELECT e.jogador_id as id, j.nome, j.foto_uri, e.gols, e.assistencias, e.time_id, p.vencedor_id, p.id as partida_id
+                FROM estatisticas_partida e JOIN partidas p ON e.partida_id = p.id JOIN jogadores j ON e.jogador_id = j.id ORDER BY p.id ASC
+            `);
+
+            const seqData = {};
+            historicoGeral.forEach(row => {
+                if (!seqData[row.id]) {
+                    seqData[row.id] = { id: row.id, nome: row.nome, foto_uri: row.foto_uri, currVit: 0, maxVit: 0, currGol: 0, maxGol: 0, currAss: 0, maxAss: 0 };
+                }
+                if (row.vencedor_id === row.time_id) {
+                    seqData[row.id].currVit++;
+                    if (seqData[row.id].currVit > seqData[row.id].maxVit) seqData[row.id].maxVit = seqData[row.id].currVit;
+                } else seqData[row.id].currVit = 0;
+
+                if (row.gols > 0) {
+                    seqData[row.id].currGol++;
+                    if (seqData[row.id].currGol > seqData[row.id].maxGol) seqData[row.id].maxGol = seqData[row.id].currGol;
+                } else seqData[row.id].currGol = 0;
+
+                if (row.assistencias > 0) {
+                    seqData[row.id].currAss++;
+                    if (seqData[row.id].currAss > seqData[row.id].maxAss) seqData[row.id].maxAss = seqData[row.id].currAss;
+                } else seqData[row.id].currAss = 0;
+            });
+
+            const arrSeq = Object.values(seqData);
+            const seqVitorias = [...arrSeq].sort((a,b) => b.maxVit - a.maxVit).map(x => ({...x, valor: x.maxVit})).filter(x => x.valor > 1).slice(0, 10);
+            const seqGols = [...arrSeq].sort((a,b) => b.maxGol - a.maxGol).map(x => ({...x, valor: x.maxGol})).filter(x => x.valor > 1).slice(0, 10);
+            const seqAssist = [...arrSeq].sort((a,b) => b.maxAss - a.maxAss).map(x => ({...x, valor: x.maxAss})).filter(x => x.valor > 1).slice(0, 10);
+
+            return {
+                artilharia, garcom, muralha, fogoAmigo, recordeGolsRacha, recordeAssistRacha, seqVitorias, seqGols, seqAssist
+            };
+        } catch (e) {
+            console.error("Erro ao gerar rankings globais:", e);
+            return null;
+        }
     }
 };

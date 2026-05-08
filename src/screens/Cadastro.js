@@ -49,24 +49,6 @@ export default function Cadastro() {
     setEditandoId(jogador.id);
   };
 
-  // NOVO: Alerta de confirmação antes de excluir
-  const handleDeletar = (id, nomeJogador) => {
-    Alert.alert('Atenção', `Tem certeza que deseja excluir ${nomeJogador}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => {
-          JogadorService.delete(id);
-          // Se eu apagar o cara que eu tava editando, limpa a tela
-          if (editandoId === id) {
-            setEditandoId(null);
-            setNome('');
-            setPosicao('Jogador');
-          }
-          carregarJogadores();
-        } 
-      }
-    ]);
-  };
-
   return (
     <View style={styles.container}>
       <TextInput
@@ -125,9 +107,6 @@ export default function Cadastro() {
             <View style={styles.acoesContainer}>
                 <TouchableOpacity style={styles.btnAcao} onPress={() => handleEditar(item)}>
                     <Text style={styles.iconeAcao}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.btnAcao} onPress={() => handleDeletar(item.id, item.nome)}>
-                    <Text style={styles.iconeAcao}>🗑️</Text>
                 </TouchableOpacity>
             </View>
 

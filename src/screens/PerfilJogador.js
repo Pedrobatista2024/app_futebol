@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Image } from 'react-native';
 import { JogadorService } from '../services/jogadorService';
 
 export default function PerfilJogador({ navigation }) {
@@ -28,9 +28,13 @@ export default function PerfilJogador({ navigation }) {
       activeOpacity={0.7}
       onPress={() => navigation.navigate('DetalheJogador', { jogadorId: item.id })}
     >
-      <View style={[styles.avatar, { backgroundColor: item.posicao === 'Goleiro' ? '#FF9800' : '#2196F3' }]}>
-        <Text style={styles.avatarTxt}>{item.nome.charAt(0).toUpperCase()}</Text>
-      </View>
+      {item.foto_uri ? (
+        <Image source={{ uri: item.foto_uri }} style={styles.avatarImage} />
+      ) : (
+        <View style={[styles.avatar, { backgroundColor: item.posicao === 'Goleiro' ? '#FF9800' : '#2196F3' }]}>
+          <Text style={styles.avatarTxt}>{item.nome.charAt(0).toUpperCase()}</Text>
+        </View>
+      )}
       
       <View style={styles.info}>
         <Text style={styles.nome}>{item.nome}</Text>
@@ -67,6 +71,15 @@ export default function PerfilJogador({ navigation }) {
           </View>
         }
       />
+
+      {/* 🔴 NOVO: BOTÃO FLUTUANTE PARA GERAR O PÔSTER DO ELENCO */}
+      <TouchableOpacity 
+        style={styles.fabElenco} 
+        onPress={() => navigation.navigate('ElencoCard')}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabTxt}>Gerar Pôster do Elenco 🖼️</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -83,7 +96,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  list: { padding: 15, paddingBottom: 30 },
+  list: { padding: 15, paddingBottom: 100 }, // Aumentado para não cobrir o último card
   card: { 
     flexDirection: 'row', 
     backgroundColor: '#fff', 
@@ -105,6 +118,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 15 
   },
+  avatarImage: {
+    width: 50, 
+    height: 50, 
+    borderRadius: 25, 
+    marginRight: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0'
+  },
   avatarTxt: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
   info: { flex: 1 },
   nome: { fontSize: 18, fontWeight: 'bold', color: '#1c1c1e' },
@@ -112,5 +133,28 @@ const styles = StyleSheet.create({
   setaContainer: { marginLeft: 10 },
   seta: { fontSize: 28, color: '#c7c7cc', fontWeight: '300' },
   vazio: { alignItems: 'center', marginTop: 50 },
-  vazioTxt: { color: '#999', fontSize: 16 }
+  vazioTxt: { color: '#999', fontSize: 16 },
+
+  // 🔴 ESTILO DO BOTÃO FLUTUANTE
+  fabElenco: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    left: 20, // Faz o botão ficar centralizado e larguinho como uma pílula
+    backgroundColor: '#4CAF50', // Verde Racha
+    paddingVertical: 15,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  fabTxt: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: 'bold' 
+  }
 });

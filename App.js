@@ -27,6 +27,7 @@ import PlacarCronometro from './src/screens/PlacarCronometro';
 import RegistroEstatisticas from './src/screens/RegistroEstatisticas';
 import PosJogo from './src/screens/PosJogo';
 import DetalheJogador from './src/screens/DetalheJogador';
+import ElencoCard from './src/screens/ElencoCard';
 
 const Stack = createNativeStackNavigator();
 
@@ -144,6 +145,13 @@ export default function App() {
         name="DetalheJogador"
         component={DetalheJogador}
         options={{ title: 'Estatísticas do Atleta' }}
+        />
+
+        
+        <Stack.Screen 
+        name="ElencoCard" 
+        component={ElencoCard} 
+        options={{ title: 'Card do Elenco' }} 
         />
 
       </Stack.Navigator>
